@@ -30,4 +30,3 @@ await connectDB();
 server.listen(ENV.PORT,()=>{
     console.log(`Server is listing at http://localhost:${ENV.PORT}`);
 })
-
