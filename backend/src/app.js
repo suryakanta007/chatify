@@ -1,6 +1,11 @@
 import express from "express";
 
-const app = express();
+import authRoutes from "./routes/auth.routes.js";
 
+const app = express();
+app.use(express.json());
+
+// Routes
+app.use("/api/v1/auth",authRoutes);
 
 export default app;
