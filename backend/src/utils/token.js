@@ -1,0 +1,8 @@
+import jwt from "jsonwebtoken";
+import ENV from "../config/config.js"
+
+export const generateToken = async (userId)=>{
+    const token = jwt.sign({id:userId},ENV.JWT_SECERT_KEY,{expiresIn:"3d"});
+    return token
+}
+

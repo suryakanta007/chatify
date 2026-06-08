@@ -15,7 +15,8 @@ if(!process.env.MONGODB_URI){
 const ENV = {
     PORT:process.env.PORT,
     MONGODB_URI:process.env.MONGODB_URI,
-    NODE_ENV:process.env.NODE_ENV
+    NODE_ENV:process.env.NODE_ENV,
+    JWT_SECERT_KEY:process.env.JWT_SECERT_KEY
 }
 
 export default ENV

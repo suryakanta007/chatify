@@ -1,15 +1,69 @@
+import bcrypt from "bcryptjs"
+
+import { User } from "../models/user.model.js";
+import { ApiResponse } from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js"
+import { HTTP_STATUS } from "../utils/statusCode.js";
+import * as authValidator from "../validators/auth.validator.js"
+import { generateToken } from "../utils/token.js";
 
-    
-    export const  register = asyncHandler(async (req,res,next)=>{
-       return res.status(200).json({message:"THis is register controller"})
-    })
-    export const login  = asyncHandler(async (req,res,next)=>{
-        res.status(200).json({message:"THis is login controller"})
+
+export const register = asyncHandler(async (req, res, next) => {
+    const validation = authValidator.redisterSchema.safeParse(req.body);
+    if (!validation.success) {
+        //! To extrat the issues for Zod validation
+        const zodErrors = validation.error
+        let zodAllIssues = []
+        let firstIssue;
+        if (zodErrors?.issues && Array.isArray(zodErrors.issues)) {
+            zodAllIssues = zodErrors.issues.map((issue) => ({
+                field: issue.path ? issue.path.join(".") : "unknown",
+                message: issue.message || "Validation Error",
+                code: issue.code
+            }))
+        }
+        firstIssue = zodAllIssues[0]?.message || "Validation Error"
+        return res.status(HTTP_STATUS.BAD_REQUEST).json(new ApiResponse(HTTP_STATUS.BAD_REQUEST, null, firstIssue))
+    }
+    const { fullName, email, password } = req.body;
+
+    const isUserExist = await User.findOne({ email });
+    if (isUserExist) {
+        return res.status(HTTP_STATUS.CONFLICT).json(new ApiResponse(HTTP_STATUS.CONFLICT, null, "User already exist"));
+    }
+
+    // hash the password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const newUser = await User.create({
+        fullName,
+        email,
+        password: hashedPassword
     })
 
-    export const logout = asyncHandler(async (req,res,next)=>{
-        res.status(200).json({message:"THis is logout controller"})
-    })
+    if (!newUser) {
+        return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json(new ApiResponse(HTTP_STATUS.INTERNAL_SERVER_ERROR, null, "Something went wrong"));
+    }
+
+    const token = generateToken(newUser._id);
+    res.cookie("authToken", token, { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 3 });
+
+    const data = {
+        _id: newUser._id,
+        fullName: newUser.fullName,
+        email: newUser.email
+    }
+
+    return res.status(HTTP_STATUS.CREATED).json(new ApiResponse(HTTP_STATUS.CREATED,data , "User created successfully"));
+
+})
+export const login = asyncHandler(async (req, res, next) => {
+    res.status(200).json({ message: "THis is login controller" })
+})
+
+export const logout = asyncHandler(async (req, res, next) => {
+    res.status(200).json({ message: "THis is logout controller" })
+})
 
 

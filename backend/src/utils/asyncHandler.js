@@ -5,7 +5,7 @@ export const asyncHandler= (requestHandler)=>{
         try {
             await requestHandler(req,res,next)
         } catch (error) {
-            res.status(500).json({err:error.mssage})
+            next(error)
         }
     }
 }
