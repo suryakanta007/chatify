@@ -48,7 +48,7 @@ export const register = asyncHandler(async (req, res, next) => {
         return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json(new ApiResponse(HTTP_STATUS.INTERNAL_SERVER_ERROR, null, "Something went wrong"));
     }
 
-    const token = generateToken(newUser._id);
+    const token = await generateToken(newUser._id);
     res.cookie("authToken", token, {
         httpOnly: true,
         maxAge: 1000 * 60 * 60 * 24 * 3,
@@ -68,7 +68,50 @@ export const register = asyncHandler(async (req, res, next) => {
 
 })
 export const login = asyncHandler(async (req, res, next) => {
-    res.status(200).json({ message: "THis is login controller" })
+    const validation = authValidator.loginSchema.safeParse(req.body);
+    if(!validation.success){
+        const zodErrors = validation.error
+        let zodAllIssues = []
+        let firstIssue;
+        if (zodErrors?.issues && Array.isArray(zodErrors.issues)) {
+            zodAllIssues = zodErrors.issues.map((issue) => ({
+                field: issue.path ? issue.path.join(".") : "unknown",
+                message: issue.message || "Validation Error",
+                code: issue.code
+            }))
+        }
+        firstIssue = zodAllIssues[0]?.message || "Validation Error"
+        return res.status(HTTP_STATUS.BAD_REQUEST).json(new ApiResponse(HTTP_STATUS.BAD_REQUEST, null, firstIssue))
+    }
+
+    const {email,password} = req.body;
+
+    const user = await User.findOne({email});
+    if(!user){
+        return res.status(HTTP_STATUS.NOT_FOUND).json(new ApiResponse(HTTP_STATUS.NOT_FOUND,null,"User not found"));
+    }
+
+    const isPasswordMatch = await bcrypt.compare(password,user.password);
+    if(!isPasswordMatch){
+        return res.status(HTTP_STATUS.UNAUTHORIZED).json(new ApiResponse(HTTP_STATUS.UNAUTHORIZED,null,"Invalid credentials"));
+    }
+
+    const token = await generateToken(user._id);
+    res.cookie("authToken", token, {
+        httpOnly: true,
+        maxAge: 1000 * 60 * 60 * 24 * 3,
+        sameSite: "strict",
+        secure: ENV.NODE_ENV === "production",
+    });
+
+    const userData = {
+        _id: user._id,
+        fullName: user.fullName,
+        email: user.email
+    }
+
+    return res.status(HTTP_STATUS.ACCEPTED).json(new ApiResponse(HTTP_STATUS.ACCEPTED,userData,"User logged in successfully"));
+
 })
 
 export const logout = asyncHandler(async (req, res, next) => {
