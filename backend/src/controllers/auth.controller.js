@@ -115,7 +115,15 @@ export const login = asyncHandler(async (req, res, next) => {
 })
 
 export const logout = asyncHandler(async (req, res, next) => {
-    res.status(200).json({ message: "THis is logout controller" })
+
+    res.cookie("authToken", "", {
+        httpOnly: true,
+        maxAge: 0,
+        sameSite: "strict",
+        secure: ENV.NODE_ENV === "production",
+    });
+
+    return res.status(HTTP_STATUS.OK).json(new ApiResponse(HTTP_STATUS.OK, null, "User logged out successfully"));
 })
 
 
