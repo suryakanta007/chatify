@@ -6,6 +6,8 @@ import { asyncHandler } from "../utils/asyncHandler.js"
 import { HTTP_STATUS } from "../utils/statusCode.js";
 import * as authValidator from "../validators/auth.validator.js"
 import { generateToken } from "../utils/token.js";
+import ENV from "../config/config.js";
+import { sendEmail } from "../config/mail.js";
 
 
 export const register = asyncHandler(async (req, res, next) => {
@@ -47,15 +49,22 @@ export const register = asyncHandler(async (req, res, next) => {
     }
 
     const token = generateToken(newUser._id);
-    res.cookie("authToken", token, { httpOnly: true, maxAge: 1000 * 60 * 60 * 24 * 3 });
+    res.cookie("authToken", token, {
+        httpOnly: true,
+        maxAge: 1000 * 60 * 60 * 24 * 3,
+        sameSite: "strict",
+        secure: ENV.NODE_ENV === "production",
+    });
 
-    const data = {
+    const userData = {
         _id: newUser._id,
         fullName: newUser.fullName,
         email: newUser.email
     }
 
-    return res.status(HTTP_STATUS.CREATED).json(new ApiResponse(HTTP_STATUS.CREATED,data , "User created successfully"));
+    const {data,error} = await sendEmail(newUser.email,newUser.fullName,ENV.CLIENT_URL);
+
+    return res.status(HTTP_STATUS.CREATED).json(new ApiResponse(HTTP_STATUS.CREATED, userData, "User created successfully"));
 
 })
 export const login = asyncHandler(async (req, res, next) => {
