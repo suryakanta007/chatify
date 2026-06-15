@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs"
+import streamifier from "streamifier"
 
 import { User } from "../models/user.model.js";
 import { ApiResponse } from "../utils/apiResponse.js";
@@ -8,6 +9,7 @@ import * as authValidator from "../validators/auth.validator.js"
 import { generateToken } from "../utils/token.js";
 import ENV from "../config/config.js";
 import { sendEmail } from "../config/mail.js";
+import { cloudinary } from "../config/cloudinary.js";
 
 
 export const register = asyncHandler(async (req, res, next) => {
@@ -62,14 +64,14 @@ export const register = asyncHandler(async (req, res, next) => {
         email: newUser.email
     }
 
-    const {data,error} = await sendEmail(newUser.email,newUser.fullName,ENV.CLIENT_URL);
+    const { data, error } = await sendEmail(newUser.email, newUser.fullName, ENV.CLIENT_URL);
 
     return res.status(HTTP_STATUS.CREATED).json(new ApiResponse(HTTP_STATUS.CREATED, userData, "User created successfully"));
 
 })
 export const login = asyncHandler(async (req, res, next) => {
     const validation = authValidator.loginSchema.safeParse(req.body);
-    if(!validation.success){
+    if (!validation.success) {
         const zodErrors = validation.error
         let zodAllIssues = []
         let firstIssue;
@@ -83,17 +85,16 @@ export const login = asyncHandler(async (req, res, next) => {
         firstIssue = zodAllIssues[0]?.message || "Validation Error"
         return res.status(HTTP_STATUS.BAD_REQUEST).json(new ApiResponse(HTTP_STATUS.BAD_REQUEST, null, firstIssue))
     }
+    const { email, password } = req.body;
 
-    const {email,password} = req.body;
-
-    const user = await User.findOne({email});
-    if(!user){
-        return res.status(HTTP_STATUS.NOT_FOUND).json(new ApiResponse(HTTP_STATUS.NOT_FOUND,null,"User not found"));
+    const user = await User.findOne({ email });
+    if (!user) {
+        return res.status(HTTP_STATUS.NOT_FOUND).json(new ApiResponse(HTTP_STATUS.NOT_FOUND, null, "User not found"));
     }
 
-    const isPasswordMatch = await bcrypt.compare(password,user.password);
-    if(!isPasswordMatch){
-        return res.status(HTTP_STATUS.UNAUTHORIZED).json(new ApiResponse(HTTP_STATUS.UNAUTHORIZED,null,"Invalid credentials"));
+    const isPasswordMatch = await bcrypt.compare(password, user.password);
+    if (!isPasswordMatch) {
+        return res.status(HTTP_STATUS.UNAUTHORIZED).json(new ApiResponse(HTTP_STATUS.UNAUTHORIZED, null, "Invalid credentials"));
     }
 
     const token = await generateToken(user._id);
@@ -110,7 +111,7 @@ export const login = asyncHandler(async (req, res, next) => {
         email: user.email
     }
 
-    return res.status(HTTP_STATUS.ACCEPTED).json(new ApiResponse(HTTP_STATUS.ACCEPTED,userData,"User logged in successfully"));
+    return res.status(HTTP_STATUS.ACCEPTED).json(new ApiResponse(HTTP_STATUS.ACCEPTED, userData, "User logged in successfully"));
 
 })
 
@@ -124,6 +125,61 @@ export const logout = asyncHandler(async (req, res, next) => {
     });
 
     return res.status(HTTP_STATUS.OK).json(new ApiResponse(HTTP_STATUS.OK, null, "User logged out successfully"));
+})
+
+export const updateProfile = asyncHandler(async (req, res, next) => {
+    const validation = authValidator.updateProfileSchema.safeParse(req.body);
+    if (!validation.success) {
+        const zodErrors = validation.error
+        let zodAllIssues = []
+        let firstIssue;
+        if (zodErrors?.issues && Array.isArray(zodErrors.issues)) {
+            zodAllIssues = zodErrors.issues.map((issue) => ({
+                field: issue.path ? issue.path.join(".") : "unknown",
+                message: issue.message || "Validation Error",
+                code: issue.code
+            }))
+        }
+        firstIssue = zodAllIssues[0]?.message || "Validation Error"
+        return res.status(HTTP_STATUS.BAD_REQUEST).json(new ApiResponse(HTTP_STATUS.BAD_REQUEST, null, firstIssue))
+    }
+    const updateData = {};
+    const { fullName } = req.body;
+    updateData.fullName = fullName;
+
+    if (req.file) {
+        // Wrap the stream in a promise for cleaner async/await flow
+        const cloudinaryResult = await new Promise((resolve, reject) => {
+            const uploadStream = cloudinary.uploader.upload_stream(
+                { folder: 'user_profiles' },
+                (err, result) => {
+                    if (err) reject(err);
+                    else resolve(result);
+                }
+            );
+            streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
+        });
+
+        updateData.profilePic = cloudinaryResult.secure_url;
+    }
+
+    const user = await User.findOneAndUpdate({
+        _id: req.user._id
+    }, updateData, {
+        new: true
+    });
+
+    if (!user) {
+        return res.status(HTTP_STATUS.NOT_FOUND).json(new ApiResponse(HTTP_STATUS.NOT_FOUND, null, "User not found"));
+    }
+
+    const data = {
+        _id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        profilePic: user.profilePic
+    }
+    return res.status(HTTP_STATUS.OK).json(new ApiResponse(HTTP_STATUS.OK, data, "User updated Sucessfuly"));
 })
 
 

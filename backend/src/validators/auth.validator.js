@@ -10,3 +10,7 @@ export const loginSchema = z.object({
     email: z.string().email().trim(),
     password:z.string()
 })
+
+export const updateProfileSchema = z.object({
+    fullName: z.string().trim().min(2).max(50).optional(),
+})

@@ -6,3 +6,8 @@ export const generateToken = async (userId)=>{
     return token
 }
 
+
+export const verifyToken = async(token)=>{
+    const decode = await jwt.verify(token,ENV.JWT_SECERT_KEY);
+    return decode?.id
+}
